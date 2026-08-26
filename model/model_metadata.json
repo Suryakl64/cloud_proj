@@ -1,0 +1,20 @@
+{
+  "model_name": "mobilenet_v2",
+  "input_shape": [
+    1,
+    3,
+    224,
+    224
+  ],
+  "onnx_opset": 13,
+  "model_size_bytes": 270115,
+  "model_size_mb": 0.26,
+  "inference_stats": {
+    "mean_ms": 2.3308819999965635,
+    "median_ms": 2.3676000000705244,
+    "p95_ms": 2.781869999967057,
+    "p99_ms": 2.9412640001555697,
+    "std_ms": 0.31488202659349324
+  },
+  "export_timestamp": "2026-08-26T05:25:56Z"
+}

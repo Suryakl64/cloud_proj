@@ -1,0 +1,6 @@
+timestamp,deployment_mode,rps_target,rps_actual,latency_ms,is_cold_start,status_code,error
+1787722067.4949362,managed,0.017,0.017,172.403,True,200,
+1787722126.3184657,managed,0.017,0.017,28.76,False,200,
+1787722185.141995,managed,0.017,0.017,37.191,False,200,
+1787722243.9655244,managed,0.017,0.017,30.772,False,200,
+1787722302.789054,managed,0.017,0.017,43.195,False,200,

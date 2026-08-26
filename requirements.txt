@@ -1,0 +1,29 @@
+# ── Model Export & Inference ──
+torch>=2.0.0
+torchvision>=0.15.0
+onnx>=1.14.0
+onnxruntime>=1.16.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# ── Deployment: Container Server ──
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# ── Deployment: Managed Endpoint ──
+boto3>=1.28.0
+sagemaker>=2.200.0
+
+# ── Load Testing ──
+locust>=2.20.0
+requests>=2.31.0
+PyYAML>=6.0.1
+
+# ── Cost Model & Analysis ──
+pandas>=2.1.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+scipy>=1.11.0
+jupyter>=1.0.0
+nbconvert>=7.0.0

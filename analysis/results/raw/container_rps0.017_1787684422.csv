@@ -1,0 +1,6 @@
+timestamp,deployment_mode,rps_target,rps_actual,latency_ms,is_cold_start,status_code,error
+1787684422.7266636,container,0.017,0.017,31.182,False,200,
+1787684481.550193,container,0.017,0.017,31.874,False,200,
+1787684540.3737223,container,0.017,0.017,35.347,False,200,
+1787684599.1972518,container,0.017,0.017,29.85,False,200,
+1787684658.0207813,container,0.017,0.017,19.969,False,200,

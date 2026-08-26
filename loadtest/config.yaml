@@ -1,0 +1,65 @@
+# ── Load Test Sweep Configuration ────────────────────────────────────────────
+# Configure endpoints, sweep parameters, and measurement settings.
+# Configured for Azure deployment.
+
+endpoints:
+  serverless:
+    url: "https://YOUR_FUNCTION_APP.azurewebsites.net/api/predict"
+    method: POST
+    payload: '{"random": true}'
+    content_type: "application/json"
+
+  container:
+    url: "http://YOUR_AZURE_VM_IP:8080/predict"
+    method: POST
+    payload: '{"random": true}'
+    content_type: "application/json"
+
+  managed:
+    # Azure ML endpoint is invoked via azure-ai-ml SDK
+    endpoint_name: "YOUR_AZURE_ML_ENDPOINT_NAME"
+    scoring_uri: "https://YOUR_ENDPOINT.eastus.inference.ml.azure.com/score"
+
+# Request rate sweep settings
+sweep:
+  # 8 steps spanning 4 orders of magnitude
+  rates_per_second:
+    - 0.017   # ~1 req/min   — very sparse
+    - 0.1     # ~6 req/min   — sparse
+    - 0.5     # ~30 req/min  — light
+    - 1.0     # ~60 req/min  — moderate
+    - 5.0     # ~300 req/min — active
+    - 10.0    # ~600 req/min — heavy
+    - 30.0    # ~1800 req/min — sustained
+    - 100.0   # ~6000 req/min — high-throughput
+
+  # Duration per sweep step
+  duration_seconds: 300        # 5 minutes per step
+  warmup_seconds: 60           # First 60s excluded from measurements
+  cooldown_seconds: 120        # Pause between steps (for cold-start reset)
+
+# Measurement settings
+measurement:
+  # Output directory for results
+  output_dir: "analysis/results/raw"
+
+  # Columns in output CSV
+  columns:
+    - timestamp
+    - deployment_mode
+    - rps_target
+    - rps_actual
+    - latency_ms
+    - is_cold_start
+    - status_code
+    - error
+
+  # Retry settings
+  max_retries: 2
+  timeout_seconds: 30
+
+# Azure-specific settings
+azure:
+  resource_group: "ml-inference-rg"
+  location: "eastus"
+  subscription_id: ""  # Set via environment variable AZURE_SUBSCRIPTION_ID

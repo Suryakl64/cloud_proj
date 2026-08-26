@@ -1,0 +1,6 @@
+timestamp,deployment_mode,rps_target,rps_actual,latency_ms,is_cold_start,status_code,error
+1787722067.079418,serverless,0.017,0.017,47.422,False,200,
+1787722125.9029474,serverless,0.017,0.017,54.545,False,200,
+1787722184.7264767,serverless,0.017,0.017,64.933,False,200,
+1787722243.5500062,serverless,0.017,0.017,48.73,False,200,
+1787722302.3735356,serverless,0.017,0.017,49.103,False,200,
