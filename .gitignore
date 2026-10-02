@@ -1,0 +1,17 @@
+# Build & Packaging artifacts
+lambda_pkg/
+function.zip
+model/model_ir9.onnx
+*.zip
+
+# Python & Environment
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+venv/
+.venv/
+
+# OS specific
+.DS_Store
+Thumbs.db

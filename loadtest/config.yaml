@@ -4,13 +4,13 @@
 
 endpoints:
   serverless:
-    url: "https://YOUR_FUNCTION_APP.azurewebsites.net/api/predict"
+    url: "https://xhxnqryeserx4cixmm74qr5k3i0sfiic.lambda-url.ap-southeast-2.on.aws/"
     method: POST
     payload: '{"random": true}'
     content_type: "application/json"
 
   container:
-    url: "http://YOUR_AZURE_VM_IP:8080/predict"
+    url: "http://3.104.118.57:8080/predict"
     method: POST
     payload: '{"random": true}'
     content_type: "application/json"

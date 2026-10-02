@@ -40,17 +40,36 @@ def _get_predictor() -> ONNXPredictor:
 def lambda_handler(event, context):
     """
     AWS Lambda proxy integration handler.
+    Supports API Gateway (v1), Function URL (v2), and direct test events.
     """
     global _invocation_count
     _invocation_count += 1
     request_start = time.perf_counter()
 
-    http_method = event.get("httpMethod", "GET")
+    # Determine HTTP method if invoked via HTTP (API Gateway or Function URL)
+    http_method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method")
 
-    if http_method == "GET":
+    # Parse body from direct test event or HTTP proxy body
+    if "random" in event or "data" in event:
+        body = event
+    else:
+        raw_body = event.get("body", "{}")
+        if isinstance(raw_body, str):
+            try:
+                body = json.loads(raw_body) if raw_body else {}
+            except Exception:
+                body = {}
+        elif isinstance(raw_body, dict):
+            body = raw_body
+        else:
+            body = {}
+
+    # Handle healthcheck GET requests
+    if http_method == "GET" and not body.get("random"):
         predictor = _get_predictor()
         return {
             "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
                 "status": "healthy",
                 "deployment_mode": "serverless",
@@ -64,7 +83,6 @@ def lambda_handler(event, context):
 
     try:
         predictor = _get_predictor()
-        body = json.loads(event.get("body", "{}"))
 
         # Run inference
         if body.get("random", False):
@@ -89,6 +107,7 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps(result)
         }
 

@@ -21,8 +21,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "3. Building Docker image for Lambda..."
-Set-Location -Path "..\.."
-docker build -t "$($ECR_REPO):$IMAGE_TAG" -f deployments/serverless/Dockerfile .
+Set-Location -Path "$PSScriptRoot\..\.."
+docker build --provenance=false -t "$($ECR_REPO):$IMAGE_TAG" -f deployments/serverless/Dockerfile .
 
 Write-Host "4. Tagging and pushing image to ECR..."
 docker tag "$($ECR_REPO):$IMAGE_TAG" "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$($ECR_REPO):$IMAGE_TAG"
