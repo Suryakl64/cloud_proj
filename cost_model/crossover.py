@@ -77,6 +77,26 @@ class CrossoverSolver:
 
         return lambda_star
 
+    def analytical_crossover_sagemaker_serverless_container(self) -> float:
+        """Closed-form crossover between SageMaker Serverless and Container."""
+        p_sm = self.pricing.sagemaker_serverless
+        p_c = self.pricing.container
+
+        compute_cost = p_sm.cost_per_gb_second * p_sm.memory_gb * p_sm.avg_duration_sec
+        per_invocation = p_sm.cost_per_request + compute_cost
+
+        return p_c.cost_per_hour / (per_invocation * 3600)
+
+    def analytical_crossover_sagemaker_serverless_managed(self) -> float:
+        """Closed-form crossover between SageMaker Serverless and Real-Time Managed."""
+        p_sm = self.pricing.sagemaker_serverless
+        p_m = self.pricing.managed
+
+        compute_cost = p_sm.cost_per_gb_second * p_sm.memory_gb * p_sm.avg_duration_sec
+        per_invocation = p_sm.cost_per_request + compute_cost
+
+        return p_m.cost_per_hour / (per_invocation * 3600)
+
     # ── Numerical Solver (Accounts for Cold Starts) ──────────────────────
 
     def numerical_crossover(
@@ -101,6 +121,7 @@ class CrossoverSolver:
         cost_fns = {
             "serverless": self.model.serverless_cost,
             "container": self.model.container_cost,
+            "sagemaker_serverless": self.model.sagemaker_serverless_cost,
             "managed": self.model.managed_cost,
         }
 
@@ -140,6 +161,8 @@ class CrossoverSolver:
         """
         pairs = [
             ("serverless", "container"),
+            ("sagemaker_serverless", "container"),
+            ("sagemaker_serverless", "managed"),
             ("serverless", "managed"),
             ("container", "managed"),
         ]
@@ -151,6 +174,10 @@ class CrossoverSolver:
             # Analytical (simplified, no cold-start effects)
             if mode_a == "serverless" and mode_b == "container":
                 analytical = self.analytical_crossover_serverless_container()
+            elif mode_a == "sagemaker_serverless" and mode_b == "container":
+                analytical = self.analytical_crossover_sagemaker_serverless_container()
+            elif mode_a == "sagemaker_serverless" and mode_b == "managed":
+                analytical = self.analytical_crossover_sagemaker_serverless_managed()
             elif mode_a == "serverless" and mode_b == "managed":
                 analytical = self.analytical_crossover_serverless_managed()
             else:
@@ -161,8 +188,8 @@ class CrossoverSolver:
 
             # Cost at crossover
             if numerical:
-                cost_at_crossover = self.model.serverless_cost(numerical)
-                cheapest_below = mode_a if self.model.serverless_cost(0.01) < self.model.container_cost(0.01) else mode_b
+                cost_at_crossover = self.model.serverless_cost(numerical) if mode_a == "serverless" else self.model.sagemaker_serverless_cost(numerical)
+                cheapest_below = mode_a if self.numerical_crossover(mode_a, mode_b, (0.001, numerical)) is None else mode_b
                 cheapest_above = mode_b if cheapest_below == mode_a else mode_a
             else:
                 cost_at_crossover = None
@@ -321,17 +348,21 @@ def print_crossover_analysis(pricing: PricingConfig = None):
     crossovers = solver.find_all_crossovers()
 
     print("\n" + "=" * 70)
-    print("  CROSSOVER ANALYSIS — ML Inference Cost Model")
+    print("  CROSSOVER ANALYSIS -- ML Inference Cost Model")
     print("=" * 70)
 
     print(f"\n  Pricing Configuration:")
-    print(f"    Serverless: ${solver.pricing.serverless.cost_per_request}/req "
+    print(f"    Serverless (Lambda): ${solver.pricing.serverless.cost_per_request}/req "
           f"+ ${solver.pricing.serverless.cost_per_gb_second}/GB-s "
-          f"× {solver.pricing.serverless.memory_gb:.1f} GB "
-          f"× {solver.pricing.serverless.avg_duration_sec*1000:.0f}ms")
-    print(f"    Container:  ${solver.pricing.container.cost_per_hour}/hr "
+          f"* {solver.pricing.serverless.memory_gb:.1f} GB "
+          f"* {solver.pricing.serverless.avg_duration_sec*1000:.0f}ms")
+    print(f"    SageMaker Serverless: ${solver.pricing.sagemaker_serverless.cost_per_request}/req "
+          f"+ ${solver.pricing.sagemaker_serverless.cost_per_gb_second}/GB-s "
+          f"* {solver.pricing.sagemaker_serverless.memory_gb:.1f} GB "
+          f"* {solver.pricing.sagemaker_serverless.avg_duration_sec*1000:.0f}ms")
+    print(f"    Container (EC2):  ${solver.pricing.container.cost_per_hour}/hr "
           f"({solver.pricing.container.instance_type})")
-    print(f"    Managed:    ${solver.pricing.managed.cost_per_hour}/hr "
+    print(f"    Managed (SageMaker RT): ${solver.pricing.managed.cost_per_hour}/hr "
           f"({solver.pricing.managed.instance_type})")
 
     print(f"\n  Crossover Points:")
@@ -339,7 +370,7 @@ def print_crossover_analysis(pricing: PricingConfig = None):
         analytical = data.get("analytical_crossover_rps")
         numerical = data.get("numerical_crossover_rps")
 
-        print(f"\n    {data['mode_a']} ↔ {data['mode_b']}:")
+        print(f"\n    {data['mode_a']} <-> {data['mode_b']}:")
         if analytical:
             print(f"      Analytical (no cold starts): {analytical:.3f} req/s "
                   f"({analytical * 60:.1f} req/min)")
@@ -352,17 +383,18 @@ def print_crossover_analysis(pricing: PricingConfig = None):
 
     # Recommendation table
     print(f"\n  Recommendation by Request Rate:")
-    print(f"    {'Rate':>12s}  {'Cheapest':>12s}  {'Cost/1k':>12s}")
-    print(f"    {'─' * 12}  {'─' * 12}  {'─' * 12}")
+    print(f"    {'Rate':>12s}  {'Cheapest':>20s}  {'Cost/1k':>12s}")
+    print(f"    {'-' * 12}  {'-' * 20}  {'-' * 12}")
 
     model = solver.model
     test_rates = [0.01, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0]
     for rate in test_rates:
         cheapest, cost = model.find_cheapest(rate)
-        print(f"    {rate:>9.3f}/s  {cheapest:>12s}  ${cost:>10.4f}")
+        print(f"    {rate:>9.3f}/s  {cheapest:>20s}  ${cost:>10.4f}")
 
     print("\n" + "=" * 70)
 
 
 if __name__ == "__main__":
     print_crossover_analysis()
+

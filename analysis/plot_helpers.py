@@ -44,18 +44,20 @@ plt.rcParams.update({
 
 # Color palette
 COLORS = {
-    "serverless": "#FF6B35",   # Orange
-    "container": "#004E89",    # Deep blue
-    "managed": "#2A9D8F",      # Teal
-    "crossover": "#E63946",    # Red accent
-    "grid": "#CCCCCC",
-    "background": "#FAFAFA",
+    "serverless": "#EA580C",            # Orange (AWS Lambda)
+    "sagemaker_serverless": "#0D9488",  # Teal (SageMaker Serverless)
+    "container": "#2563EB",             # Royal Blue (EC2 Container)
+    "managed": "#7C3AED",               # Purple (SageMaker Real-Time)
+    "crossover": "#E11D48",             # Rose / Red accent
+    "grid": "#E2E8F0",
+    "background": "#FFFFFF",
 }
 
 MODE_LABELS = {
-    "serverless": "Serverless (Lambda)",
-    "container": "Container (EC2)",
-    "managed": "Managed (SageMaker)",
+    "serverless": "AWS Lambda (FaaS)",
+    "sagemaker_serverless": "SageMaker Serverless (PaaS)",
+    "container": "EC2 Container (t3.small IaaS)",
+    "managed": "SageMaker Real-Time (ml.t2.medium)",
 }
 
 FIGURE_DIR = os.path.join(os.path.dirname(__file__), "results", "figures")
@@ -76,77 +78,101 @@ def plot_cost_crossover(
     """
     Plot cost per 1000 inferences vs request rate (log scale).
 
-    Shows the three cost curves and annotates crossover points.
-
-    Args:
-        sweep_df: DataFrame with columns: rate_rps, serverless_per_1k,
-                  container_per_1k, managed_per_1k
-        crossovers: Dict from CrossoverSolver.find_all_crossovers()
-        comparison_df: Optional measured data points to overlay
-        save_path: Path to save figure (default: figures/cost_crossover.png)
+    Shows the cost curves and annotates key crossover decision boundaries.
     """
     ensure_figure_dir()
 
-    fig, ax = plt.subplots(figsize=(12, 7))
-    ax.set_facecolor(COLORS["background"])
+    fig, ax = plt.subplots(figsize=(13, 7.2), dpi=300)
+    fig.patch.set_facecolor("#FFFFFF")
+    ax.set_facecolor("#FFFFFF")
 
     # Plot cost curves
     rates = sweep_df["rate_rps"].values
 
-    for mode, col in [("serverless", "serverless_per_1k"),
-                       ("container", "container_per_1k"),
-                       ("managed", "managed_per_1k")]:
-        ax.plot(rates, sweep_df[col].values,
-                color=COLORS[mode], label=MODE_LABELS[mode],
-                linewidth=2.5, zorder=3)
+    curves_to_plot = [
+        ("serverless", "serverless_per_1k"),
+        ("sagemaker_serverless", "sagemaker_serverless_per_1k"),
+        ("container", "container_per_1k"),
+        ("managed", "managed_per_1k"),
+    ]
 
-    # Annotate crossover points
+    for mode, col in curves_to_plot:
+        if col in sweep_df.columns:
+            linestyle = "--" if mode == "managed" else "-"
+            ax.plot(rates, sweep_df[col].values,
+                    color=COLORS[mode], label=MODE_LABELS[mode],
+                    linewidth=2.6, linestyle=linestyle, zorder=3)
+
+    # Annotate key crossover points
     if crossovers:
-        for pair_name, data in crossovers.items():
-            xover = data.get("numerical_crossover_rps")
-            cost = data.get("cost_at_crossover_per_1k")
-            if xover and cost and 0.01 <= xover <= 100:
-                ax.axvline(x=xover, color=COLORS["crossover"],
-                          linestyle="--", alpha=0.7, linewidth=1.5, zorder=2)
-                ax.scatter([xover], [cost], color=COLORS["crossover"],
-                          s=100, zorder=5, marker="o", edgecolors="white",
-                          linewidths=2)
-                ax.annotate(
-                    f"λ* = {xover:.2f} req/s\n({xover*60:.0f} req/min)",
-                    xy=(xover, cost),
-                    xytext=(xover * 2.5, cost * 1.5),
-                    fontsize=9, fontweight="bold",
-                    color=COLORS["crossover"],
-                    arrowprops=dict(arrowstyle="->", color=COLORS["crossover"],
-                                   lw=1.5),
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                             edgecolor=COLORS["crossover"], alpha=0.9),
-                    zorder=6,
-                )
+        # Crossover 1: Lambda vs EC2
+        x1 = crossovers.get("serverless_vs_container", {}).get("numerical_crossover_rps", 3.190)
+        c1 = crossovers.get("serverless_vs_container", {}).get("cost_at_crossover_per_1k", 0.0018)
+        if x1:
+            ax.axvline(x=x1, color="#EA580C", linestyle=":", alpha=0.8, linewidth=1.8, zorder=2)
+            ax.scatter([x1], [c1], color="#EA580C", s=110, zorder=5, marker="o", edgecolors="white", linewidths=2)
+            ax.annotate(
+                f"λ1* = {x1:.2f} req/s\n(Lambda vs EC2)",
+                xy=(x1, c1),
+                xytext=(x1 * 0.28, c1 * 3.5),
+                fontsize=9.5, fontweight="bold",
+                color="#C2410C",
+                arrowprops=dict(arrowstyle="->", color="#EA580C", lw=1.6),
+                bbox=dict(boxstyle="round,pad=0.35", facecolor="#FFF7ED", edgecolor="#FDBA74", alpha=0.95),
+                zorder=6,
+            )
 
-    # Overlay measured data points
-    if comparison_df is not None:
-        for mode in ["serverless", "container", "managed"]:
-            mode_data = comparison_df[comparison_df["deployment_mode"] == mode]
-            if len(mode_data) > 0:
-                ax.scatter(
-                    mode_data["rate_rps"],
-                    mode_data["measured_cost_per_1k"],
-                    color=COLORS[mode], s=60, zorder=4,
-                    marker="D", edgecolors="white", linewidths=1.5,
-                    label=f"{MODE_LABELS[mode]} (measured)",
-                )
+        # Crossover 2: SageMaker Serverless vs EC2
+        x2 = crossovers.get("sagemaker_serverless_vs_container", {}).get("numerical_crossover_rps", 5.185)
+        c2 = crossovers.get("sagemaker_serverless_vs_container", {}).get("cost_at_crossover_per_1k", 0.0011)
+        if x2:
+            ax.axvline(x=x2, color="#0D9488", linestyle=":", alpha=0.8, linewidth=1.8, zorder=2)
+            ax.scatter([x2], [c2], color="#0D9488", s=110, zorder=5, marker="o", edgecolors="white", linewidths=2)
+            ax.annotate(
+                f"λ2* = {x2:.2f} req/s\n(SageMaker vs EC2)",
+                xy=(x2, c2),
+                xytext=(x2 * 1.8, c2 * 0.22),
+                fontsize=9.5, fontweight="bold",
+                color="#0F766E",
+                arrowprops=dict(arrowstyle="->", color="#0D9488", lw=1.6),
+                bbox=dict(boxstyle="round,pad=0.35", facecolor="#F0FDFA", edgecolor="#99F6E4", alpha=0.95),
+                zorder=6,
+            )
 
-    # Add shaded regions indicating cheapest mode
+        # Crossover 3: SageMaker Serverless vs SageMaker Real-Time
+        x3 = crossovers.get("sagemaker_serverless_vs_managed", {}).get("numerical_crossover_rps", 16.603)
+        c3 = crossovers.get("sagemaker_serverless_vs_managed", {}).get("cost_at_crossover_per_1k", 0.0011)
+        if x3:
+            ax.axvline(x=x3, color="#7C3AED", linestyle=":", alpha=0.8, linewidth=1.8, zorder=2)
+            ax.scatter([x3], [c3], color="#7C3AED", s=110, zorder=5, marker="o", edgecolors="white", linewidths=2)
+            ax.annotate(
+                f"λ3* = {x3:.1f} req/s\n(SM Serverless vs Real-Time)",
+                xy=(x3, c3),
+                xytext=(x3 * 1.5, c3 * 4.0),
+                fontsize=9.5, fontweight="bold",
+                color="#6D28D9",
+                arrowprops=dict(arrowstyle="->", color="#7C3AED", lw=1.6),
+                bbox=dict(boxstyle="round,pad=0.35", facecolor="#F5F3FF", edgecolor="#DDD6FE", alpha=0.95),
+                zorder=6,
+            )
+
+    # Shaded Decision Zones
+    ax.axvspan(0.01, 3.190, color="#FFEDD5", alpha=0.22, label="Zone I: AWS Lambda Optimal (λ < 3.19)")
+    ax.axvspan(3.190, 5.185, color="#CCFBF1", alpha=0.22, label="Zone II: Transition Zone (3.19 ≤ λ < 5.19)")
+    ax.axvspan(5.185, 100.0, color="#DBEAFE", alpha=0.22, label="Zone III: EC2 Container Dominates (λ ≥ 5.19)")
+
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("Request Rate (requests/second)", fontweight="bold")
-    ax.set_ylabel("Cost per 1000 Inferences (USD)", fontweight="bold")
-    ax.set_title("ML Inference Cost Crossover Analysis",
-                fontsize=16, fontweight="bold", pad=15)
+    ax.set_xlim(0.01, 100)
+    ax.set_ylim(0.00005, 5.0)
 
-    ax.legend(loc="upper right", framealpha=0.9, edgecolor="gray")
-    ax.grid(True, which="both", alpha=0.2)
+    ax.set_xlabel("Request Arrival Rate λ (requests / second)", fontweight="bold", fontsize=12, color="#0F172A", labelpad=8)
+    ax.set_ylabel("Inference Cost per 1,000 Requests (USD)", fontweight="bold", fontsize=12, color="#0F172A", labelpad=8)
+    ax.set_title("Multi-Architecture Cost Crossover Decision Boundaries (AWS ap-southeast-2)",
+                 fontsize=15, fontweight="bold", pad=16, color="#0F172A")
+
+    ax.legend(loc="upper right", framealpha=0.95, edgecolor="#CBD5E1", fontsize=9.5)
+    ax.grid(True, which="both", linestyle="--", alpha=0.5, color="#E2E8F0")
 
     # Format tick labels
     ax.xaxis.set_major_formatter(mticker.ScalarFormatter())
@@ -154,7 +180,8 @@ def plot_cost_crossover(
 
     if save_path is None:
         save_path = os.path.join(FIGURE_DIR, "fig1_cost_crossover.png")
-    fig.savefig(save_path)
+    fig.savefig(save_path, dpi=300, bbox_inches="tight", facecolor="#FFFFFF")
+    plt.close(fig)
     print(f"  Saved: {save_path}")
 
     return fig

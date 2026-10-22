@@ -55,8 +55,31 @@ class ContainerPricing:
 
 
 @dataclass
+class SageMakerServerlessPricing:
+    """AWS SageMaker Serverless Inference pricing parameters."""
+
+    # Per-request charge ($0.20 per 1M requests)
+    cost_per_request: float = 0.00000020
+
+    # Compute charge (per GB-second, standard AWS is $0.000020)
+    cost_per_gb_second: float = 0.0000200
+
+    # Endpoint memory configuration
+    memory_mb: int = 2048
+    memory_gb: float = field(init=False)
+
+    # Measured inference duration (seconds)
+    avg_duration_sec: float = 0.02084  # 20.84ms empirical warm inference
+    cold_start_duration_sec: float = 0.1556  # 155.6ms model load overhead
+    cold_start_probability: float = 0.05
+
+    def __post_init__(self):
+        self.memory_gb = self.memory_mb / 1024.0
+
+
+@dataclass
 class ManagedPricing:
-    """AWS SageMaker Managed endpoint pricing parameters."""
+    """AWS SageMaker Real-Time Managed endpoint pricing parameters."""
 
     # Hourly cost for the managed instance
     # ml.t2.medium: smallest managed option
@@ -73,10 +96,11 @@ class ManagedPricing:
 
 @dataclass
 class PricingConfig:
-    """Complete pricing configuration for all three modes."""
+    """Complete pricing configuration for all deployment modes."""
 
     serverless: ServerlessPricing = field(default_factory=ServerlessPricing)
     container: ContainerPricing = field(default_factory=ContainerPricing)
+    sagemaker_serverless: SageMakerServerlessPricing = field(default_factory=SageMakerServerlessPricing)
     managed: ManagedPricing = field(default_factory=ManagedPricing)
 
     # Model characteristics
@@ -100,6 +124,13 @@ class PricingConfig:
             "container": {
                 "cost_per_hour": self.container.cost_per_hour,
                 "instance_type": self.container.instance_type,
+            },
+            "sagemaker_serverless": {
+                "cost_per_request": self.sagemaker_serverless.cost_per_request,
+                "cost_per_gb_second": self.sagemaker_serverless.cost_per_gb_second,
+                "memory_mb": self.sagemaker_serverless.memory_mb,
+                "avg_duration_sec": self.sagemaker_serverless.avg_duration_sec,
+                "cold_start_duration_sec": self.sagemaker_serverless.cold_start_duration_sec,
             },
             "managed": {
                 "cost_per_hour": self.managed.cost_per_hour,
@@ -127,13 +158,21 @@ def get_aws_pricing() -> PricingConfig:
             cost_per_request=0.0000002,  # Lambda
             cost_per_gb_second=0.0000166667,
             memory_mb=1024,
-            avg_duration_sec=0.050,
+            avg_duration_sec=0.02918,  # Measured Lambda warm latency
+            cold_start_duration_sec=0.4132,
         ),
         container=ContainerPricing(
             cost_per_hour=0.0208,  # t3.small
             instance_type="t3.small",
             vcpus=2,
             memory_gb=2.0,
+        ),
+        sagemaker_serverless=SageMakerServerlessPricing(
+            cost_per_request=0.0000002,  # SageMaker Serverless
+            cost_per_gb_second=0.0000200,
+            memory_mb=2048,
+            avg_duration_sec=0.02084,  # Measured SageMaker warm latency
+            cold_start_duration_sec=0.1556,
         ),
         managed=ManagedPricing(
             cost_per_hour=0.065,  # ml.t2.medium

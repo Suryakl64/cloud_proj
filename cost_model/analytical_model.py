@@ -88,20 +88,27 @@ class CostModel:
 
         return cost_per_request * 1000
 
+    def sagemaker_serverless_cost(self, lam: float) -> float:
+        """
+        Cost per 1000 inferences for SageMaker Serverless Inference.
+
+        C_sm_serverless = 1000 × (c_request + c_gb_sec × mem_gb × duration)
+        """
+        p = self.pricing.sagemaker_serverless
+        cold_prob = min(0.5, max(0.01, 0.20 * np.exp(-lam / 2.0)))
+        effective_duration = (
+            (1 - cold_prob) * p.avg_duration_sec +
+            cold_prob * p.cold_start_duration_sec
+        )
+        compute_cost = p.cost_per_gb_second * p.memory_gb * effective_duration
+        per_invocation_cost = p.cost_per_request + compute_cost
+        return per_invocation_cost * 1000
+
     def managed_cost(self, lam: float) -> float:
         """
-        Cost per 1000 inferences for managed endpoint (SageMaker).
+        Cost per 1000 inferences for real-time managed endpoint (SageMaker).
 
         C_managed = (c_sm_hour / (λ × 3600)) × 1000
-
-        Same structure as container but with a higher hourly rate
-        reflecting the managed service premium.
-
-        Args:
-            lam: Request rate (requests/second). Must be > 0.
-
-        Returns:
-            Cost in USD per 1000 inferences.
         """
         if lam <= 0:
             return float("inf")
@@ -115,7 +122,7 @@ class CostModel:
     # ── Monthly Cost Functions ───────────────────────────────────────────
 
     def serverless_monthly(self, lam: float) -> float:
-        """Total monthly cost for serverless at rate λ."""
+        """Total monthly cost for serverless (Lambda) at rate λ."""
         p = self.pricing.serverless
         hours = self.pricing.hours_per_month
         total_requests = lam * 3600 * hours
@@ -136,13 +143,31 @@ class CostModel:
 
         return request_cost + compute_cost
 
+    def sagemaker_serverless_monthly(self, lam: float) -> float:
+        """Total monthly cost for SageMaker Serverless Inference at rate λ."""
+        p = self.pricing.sagemaker_serverless
+        hours = self.pricing.hours_per_month
+        total_requests = lam * 3600 * hours
+
+        cold_prob = min(0.5, max(0.01, 0.20 * np.exp(-lam / 2.0)))
+        effective_duration = (
+            (1 - cold_prob) * p.avg_duration_sec +
+            cold_prob * p.cold_start_duration_sec
+        )
+
+        request_cost = total_requests * p.cost_per_request
+        compute_gb_sec = total_requests * p.memory_gb * effective_duration
+        compute_cost = compute_gb_sec * p.cost_per_gb_second
+
+        return request_cost + compute_cost
+
     def container_monthly(self, lam: float) -> float:
         """Total monthly cost for container (always-on)."""
         p = self.pricing.container
         return p.cost_per_hour * self.pricing.hours_per_month
 
     def managed_monthly(self, lam: float) -> float:
-        """Total monthly cost for managed endpoint (always-on)."""
+        """Total monthly cost for real-time managed endpoint (always-on)."""
         p = self.pricing.managed
         return p.cost_per_hour * self.pricing.hours_per_month
 
@@ -164,11 +189,13 @@ class CostModel:
 
         serverless = np.array([self.serverless_cost(r) for r in rates])
         container = np.array([self.container_cost(r) for r in rates])
+        sm_serverless = np.array([self.sagemaker_serverless_cost(r) for r in rates])
         managed = np.array([self.managed_cost(r) for r in rates])
 
         # Monthly costs
         serverless_mo = np.array([self.serverless_monthly(r) for r in rates])
         container_mo = np.array([self.container_monthly(r) for r in rates])
+        sm_serverless_mo = np.array([self.sagemaker_serverless_monthly(r) for r in rates])
         managed_mo = np.array([self.managed_monthly(r) for r in rates])
 
         return {
@@ -176,11 +203,13 @@ class CostModel:
             "per_1k": {
                 "serverless": serverless,
                 "container": container,
+                "sagemaker_serverless": sm_serverless,
                 "managed": managed,
             },
             "monthly": {
                 "serverless": serverless_mo,
                 "container": container_mo,
+                "sagemaker_serverless": sm_serverless_mo,
                 "managed": managed_mo,
             },
         }
@@ -195,6 +224,7 @@ class CostModel:
         costs = {
             "serverless": self.serverless_cost(lam),
             "container": self.container_cost(lam),
+            "sagemaker_serverless": self.sagemaker_serverless_cost(lam),
             "managed": self.managed_cost(lam),
         }
         cheapest = min(costs, key=costs.get)

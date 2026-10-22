@@ -63,7 +63,7 @@ class CostSimulator:
         os.makedirs(output_dir, exist_ok=True)
 
         print("=" * 70)
-        print("  COST SIMULATION — Full Sweep")
+        print("  COST SIMULATION -- Full Sweep")
         print("=" * 70)
 
         # Build comparison table
@@ -114,9 +114,11 @@ class CostSimulator:
         sweep_df = pd.DataFrame({
             "rate_rps": smooth_rates,
             "serverless_per_1k": sweep_data["per_1k"]["serverless"],
+            "sagemaker_serverless_per_1k": sweep_data["per_1k"]["sagemaker_serverless"],
             "container_per_1k": sweep_data["per_1k"]["container"],
             "managed_per_1k": sweep_data["per_1k"]["managed"],
             "serverless_monthly": sweep_data["monthly"]["serverless"],
+            "sagemaker_serverless_monthly": sweep_data["monthly"]["sagemaker_serverless"],
             "container_monthly": sweep_data["monthly"]["container"],
             "managed_monthly": sweep_data["monthly"]["managed"],
         })
@@ -294,8 +296,8 @@ class CostSimulator:
               f"{'Managed':>12s}  {'Cheapest':>12s}  {'Savings':>8s}")
         print(f"  {'(req/s)':>10s}  {'($/1k inf)':>12s}  {'($/1k inf)':>12s}  "
               f"{'($/1k inf)':>12s}  {'':>12s}  {'':>8s}")
-        print(f"  {'─' * 10}  {'─' * 12}  {'─' * 12}  "
-              f"{'─' * 12}  {'─' * 12}  {'─' * 8}")
+        print(f"  {'-' * 10}  {'-' * 12}  {'-' * 12}  "
+              f"{'-' * 12}  {'-' * 12}  {'-' * 8}")
 
         for _, row in df.iterrows():
             print(
@@ -310,7 +312,7 @@ class CostSimulator:
         # Monthly costs
         print(f"\n  Monthly Cost Summary:")
         print(f"  {'Rate':>10s}  {'Serverless':>12s}  {'Container':>12s}  {'Managed':>12s}")
-        print(f"  {'─' * 10}  {'─' * 12}  {'─' * 12}  {'─' * 12}")
+        print(f"  {'-' * 10}  {'-' * 12}  {'-' * 12}  {'-' * 12}")
         for _, row in df.iterrows():
             print(
                 f"  {row['rate_rps']:>10.3f}  "
@@ -325,10 +327,10 @@ class CostSimulator:
         for name, data in crossovers.items():
             numerical = data.get("numerical_crossover_rps")
             if numerical:
-                print(f"    {data['mode_a']} ↔ {data['mode_b']}: "
+                print(f"    {data['mode_a']} <-> {data['mode_b']}: "
                       f"{numerical:.3f} req/s ({numerical * 60:.1f} req/min)")
             else:
-                print(f"    {data['mode_a']} ↔ {data['mode_b']}: No crossover found")
+                print(f"    {data['mode_a']} <-> {data['mode_b']}: No crossover found")
 
 
 def main():

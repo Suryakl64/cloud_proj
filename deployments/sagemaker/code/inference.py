@@ -11,14 +11,27 @@ Defines standard SageMaker PyTorch / Triton container hooks:
 import os
 import json
 import time
-import numpy as np
-import onnxruntime as ort
+import sys
+
+print("[SAGEMAKER INIT] Python executable:", sys.executable)
+print("[SAGEMAKER INIT] Python version:", sys.version)
+
+try:
+    import numpy as np
+    import onnxruntime as ort
+    print(f"[SAGEMAKER INIT] numpy version: {np.__version__}")
+    print(f"[SAGEMAKER INIT] onnxruntime version: {ort.__version__}")
+except Exception as e:
+    print(f"[SAGEMAKER ERROR] Failed to import numpy/onnxruntime: {e}", file=sys.stderr)
+    raise
+
 
 def model_fn(model_dir):
     """
     Loads the ONNX model from the model directory.
     Called once when the SageMaker container environment starts up.
     """
+    print(f"[SAGEMAKER] model_fn called with model_dir: {model_dir}")
     start_time = time.perf_counter()
     
     # Try finding model.onnx or model_ir9.onnx
@@ -27,7 +40,12 @@ def model_fn(model_dir):
         model_path = os.path.join(model_dir, "model_ir9.onnx")
     
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file not found in {model_dir}")
+        available_files = os.listdir(model_dir) if os.path.exists(model_dir) else "DIR_NOT_FOUND"
+        err_msg = f"Model file not found in {model_dir}. Available: {available_files}"
+        print(f"[SAGEMAKER ERROR] {err_msg}", file=sys.stderr)
+        raise FileNotFoundError(err_msg)
+
+    print(f"[SAGEMAKER] Loading model from: {model_path} (size: {os.path.getsize(model_path)} bytes)")
 
     # Configure ONNX Runtime execution session for CPU
     opts = ort.SessionOptions()
@@ -36,6 +54,7 @@ def model_fn(model_dir):
 
     session = ort.InferenceSession(model_path, sess_options=opts, providers=["CPUExecutionProvider"])
     load_time_ms = (time.perf_counter() - start_time) * 1000
+    print(f"[SAGEMAKER] ONNX model successfully loaded in {load_time_ms:.2f} ms")
 
     return {
         "session": session,
@@ -55,7 +74,6 @@ def input_fn(request_body, request_content_type="application/json"):
         
         # Support various payload formats
         if "random" in data and data["random"]:
-            # Generate dummy 1x3x224x224 tensor
             return np.random.randn(1, 3, 224, 224).astype(np.float32)
         elif "input" in data:
             tensor = np.array(data["input"], dtype=np.float32).reshape((1, 3, 224, 224))
@@ -65,7 +83,6 @@ def input_fn(request_body, request_content_type="application/json"):
             tensor = np.array(data["data"], dtype=np.float32).reshape(shape)
             return tensor
         else:
-            # Fallback to random tensor
             return np.zeros((1, 3, 224, 224), dtype=np.float32)
             
     elif request_content_type == "application/x-npy":
