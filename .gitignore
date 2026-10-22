@@ -3,6 +3,7 @@ lambda_pkg/
 function.zip
 model/model_ir9.onnx
 *.zip
+*.tar.gz
 
 # Python & Environment
 __pycache__/
