@@ -1,28 +1,27 @@
 """
-Generates a publication-grade architecture diagram for the ML Inference Crossover Project.
+Generates a publication-grade 3-way architecture diagram for the ML Inference Crossover Project.
 Outputs: analysis/results/figures/architecture_diagram.png
 """
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.patches import FancyBboxPatch, ArrowStyle
+from matplotlib.patches import FancyBboxPatch
 
 def create_diagram(output_path="analysis/results/figures/architecture_diagram.png"):
-    fig = plt.figure(figsize=(16, 9.5), dpi=300)
+    fig = plt.figure(figsize=(16.8, 11.2), dpi=300)
     ax = fig.add_subplot(111)
-    ax.set_xlim(0, 16)
-    ax.set_ylim(0, 9.5)
+    ax.set_xlim(0, 16.8)
+    ax.set_ylim(0, 11.2)
     ax.axis("off")
 
     # Colors (Modern Executive Cloud Palette)
     c_bg = "#F8FAFC"          # Slate 50
-    c_border = "#E2E8F0"      # Slate 200
     c_aws = "#232F3E"         # AWS Dark Blue
     c_aws_orange = "#FF9900"  # AWS Orange
-    c_ec2 = "#3B82F6"         # Blue
-    c_lambda = "#F59E0B"      # Amber
-    c_client = "#6366F1"      # Indigo
-    c_eval = "#10B981"        # Emerald
+    c_ec2 = "#2563EB"         # Blue
+    c_lambda = "#EA580C"      # Amber / Orange
+    c_sm = "#0D9488"          # Teal
+    c_client = "#4F46E5"      # Indigo
+    c_eval = "#059669"        # Emerald
     c_card_bg = "#FFFFFF"     # White
     c_text_dark = "#0F172A"   # Slate 900
     c_text_muted = "#64748B"  # Slate 500
@@ -30,9 +29,9 @@ def create_diagram(output_path="analysis/results/figures/architecture_diagram.pn
     fig.patch.set_facecolor(c_bg)
 
     # Title & Subtitle Header
-    ax.text(8, 9.1, "System Architecture: ML Inference Deployment Dual Testbed", 
+    ax.text(8.4, 10.75, "System Architecture: 3-Way ML Inference Deployment Testbed", 
             ha="center", va="center", fontsize=19, fontweight="bold", color=c_text_dark)
-    ax.text(8, 8.7, "Comparative Evaluation & Cost Crossover Framework for MobileNetV2 (ONNX Runtime)", 
+    ax.text(8.4, 10.35, "Comparative Evaluation & Cost Crossover Framework for MobileNetV2 (ONNX Runtime) across IaaS, FaaS, and PaaS", 
             ha="center", va="center", fontsize=12, color=c_text_muted)
 
     def draw_card(x, y, w, h, title="", subtitle="", border_color="#CBD5E1", fill_color=c_card_bg, title_color=c_text_dark):
@@ -48,135 +47,155 @@ def create_diagram(output_path="analysis/results/figures/architecture_diagram.pn
     # ─────────────────────────────────────────────────────────────
     # SECTION 1: CLIENT & LOAD GENERATOR (Left)
     # ─────────────────────────────────────────────────────────────
-    draw_card(0.6, 1.8, 3.2, 6.4, "Client & Load Generator", "Evaluation Harness", border_color=c_client)
+    draw_card(0.6, 1.4, 3.2, 8.5, "Client & Load Generator", "Evaluation Harness", border_color=c_client)
     
-    # Sub-items in Client
     sub_items_client = [
-        ("Async Benchmark Runner", "loadtest/benchmark_live.py\nHTTPX Async concurrency (1-20)", "#EEF2FF", c_client),
-        ("Workload Profiler", "Synthetic Poisson / Burst traffic\nParametric rate sweeps", "#F1F5F9", c_text_dark),
-        ("Telemetry Collector", "Latency logger (P50/P95/P99)\nCold-start detection engine", "#F1F5F9", c_text_dark),
-        ("ONNX Input Payload", "Synthesized 224x224x3 Tensor\nRaw JSON vector data", "#F1F5F9", c_text_dark)
+        ("Async Benchmark Runner", "loadtest/benchmark_live.py\nHTTPX & Boto3 asyncio pool", "#EEF2FF", c_client),
+        ("Workload Profiler", "Synthetic Poisson & burst traffic\nConcurrency sweep (1, 5, 10, 20)", "#F1F5F9", c_text_dark),
+        ("Telemetry Engine", "Live RTT & server latency log\nCold-start detection engine", "#F1F5F9", c_text_dark),
+        ("Input Tensor Payload", "MobileNetV2: 224x224x3 Float32\nOptimized binary/JSON payload", "#F1F5F9", c_text_dark),
+        ("Empirical CSV Logger", "Timestamp, mode, RTT, server_ms\nSaved to analysis/results/raw/", "#F1F5F9", c_text_dark)
     ]
-    cur_y = 6.4
+    cur_y = 8.35
     for title, desc, bg, tc in sub_items_client:
         box = FancyBboxPatch((0.85, cur_y), 2.7, 1.05, boxstyle="round,pad=0.04,rounding_size=0.1",
                              edgecolor="#CBD5E1", facecolor=bg, linewidth=1, zorder=3)
         ax.add_patch(box)
-        ax.text(1.0, cur_y + 0.75, title, fontsize=9.5, fontweight="bold", color=tc, zorder=4)
-        ax.text(1.0, cur_y + 0.35, desc, fontsize=7.5, color=c_text_muted, zorder=4)
-        cur_y -= 1.3
+        ax.text(1.0, cur_y + 0.72, title, fontsize=9.5, fontweight="bold", color=tc, zorder=4)
+        ax.text(1.0, cur_y + 0.32, desc, fontsize=7.5, color=c_text_muted, zorder=4)
+        cur_y -= 1.35
 
     # ─────────────────────────────────────────────────────────────
     # SECTION 2: AWS CLOUD REGION (Center Large Container)
     # ─────────────────────────────────────────────────────────────
-    aws_bg = FancyBboxPatch((4.2, 1.8), 7.6, 6.4, boxstyle="round,pad=0.08,rounding_size=0.2",
+    aws_bg = FancyBboxPatch((4.2, 1.4), 8.0, 8.5, boxstyle="round,pad=0.08,rounding_size=0.2",
                             edgecolor=c_aws_orange, facecolor="#F8FAFC", linewidth=2, linestyle="--", zorder=1)
     ax.add_patch(aws_bg)
     
     # AWS Region Label Badge
-    aws_badge = FancyBboxPatch((4.4, 7.8), 3.2, 0.45, boxstyle="round,pad=0.05,rounding_size=0.1",
+    aws_badge = FancyBboxPatch((4.4, 9.45), 3.6, 0.45, boxstyle="round,pad=0.05,rounding_size=0.1",
                                edgecolor=c_aws, facecolor=c_aws, zorder=3)
     ax.add_patch(aws_badge)
-    ax.text(6.0, 8.02, "AWS Cloud Region (ap-southeast-2 Sydney)", ha="center", va="center", 
+    ax.text(6.2, 9.68, "AWS Cloud Region (ap-southeast-2 Sydney)", ha="center", va="center", 
             fontsize=9.5, fontweight="bold", color="#FFFFFF", zorder=4)
 
     # ── BRANCH A: EC2 CONTAINER (Top Center) ──
-    draw_card(4.5, 4.9, 7.0, 2.7, "Baseline: Always-On Container VM", "AWS EC2 (t3.small: 2 vCPU, 2 GB RAM) · $15.18/mo", 
+    draw_card(4.5, 7.15, 7.4, 2.2, "Option A: EC2 Container (IaaS Baseline)", 
+              "AWS EC2 (t3.small: 2 vCPU, 2 GB RAM) · $15.18/mo fixed", 
               border_color=c_ec2, title_color="#1E40AF")
     
-    # EC2 inner boxes
     ec2_boxes = [
-        ("Security Group", "Port 8080 Open\nPublic IP Ingress", 4.7, 5.15, 1.8, 1.3),
-        ("Docker Engine", "python:3.11-slim\nFastAPI + Uvicorn", 6.8, 5.15, 2.1, 1.3),
-        ("ONNX Runtime", "MobileNetV2 (RAM)\n10.28 ms mean (σ=0.3)", 9.2, 5.15, 2.1, 1.3)
+        ("Security Group", "Port 8080 Ingress\nPublic IPv4 VPC", 4.7, 7.35, 2.0, 1.15),
+        ("Docker Engine", "python:3.11-slim\nFastAPI + Uvicorn", 7.1, 7.35, 2.2, 1.15),
+        ("ONNX Runtime", "In-RAM MobileNetV2\n10.31 ms (σ = 0.14 ms)", 9.6, 7.35, 2.1, 1.15)
     ]
     for b_title, b_sub, bx, by, bw, bh in ec2_boxes:
         box = FancyBboxPatch((bx, by), bw, bh, boxstyle="round,pad=0.04,rounding_size=0.1",
                              edgecolor="#93C5FD", facecolor="#EFF6FF", linewidth=1.2, zorder=3)
         ax.add_patch(box)
-        ax.text(bx + 0.15, by + bh - 0.35, b_title, fontsize=9.5, fontweight="bold", color="#1E3A8A", zorder=4)
-        ax.text(bx + 0.15, by + bh - 0.85, b_sub, fontsize=8, color="#3B82F6", zorder=4)
+        ax.text(bx + 0.12, by + bh - 0.32, b_title, fontsize=9, fontweight="bold", color="#1E3A8A", zorder=4)
+        ax.text(bx + 0.12, by + bh - 0.75, b_sub, fontsize=7.5, color="#2563EB", zorder=4)
 
-    # ── BRANCH B: SERVERLESS LAMBDA (Bottom Center) ──
-    draw_card(4.5, 2.0, 7.0, 2.7, "Proposed: Serverless FaaS", "AWS Lambda (1024 MB RAM, Python 3.11) · Pay-per-use", 
-              border_color=c_lambda, title_color="#B45309")
+    # ── BRANCH B: SERVERLESS LAMBDA (Middle Center) ──
+    draw_card(4.5, 4.45, 7.4, 2.2, "Option B: AWS Lambda (FaaS Serverless)", 
+              "AWS Lambda (1024 MB RAM, Python 3.11) · Pay-per-use ($0 Idle)", 
+              border_color=c_lambda, title_color="#9A3412")
     
-    # Lambda inner boxes
     lambda_boxes = [
-        ("Lambda Function URL", "AuthType: NONE\nCORS / HTTPS endpoint", 4.7, 2.25, 1.8, 1.3),
-        ("Runtime & S3 Package", "/var/task handler\nS3 Deployment Zip (67MB)", 6.8, 2.25, 2.1, 1.3),
-        ("Patched ONNX Engine", "IR v9 Byte-patched\nCold: 394ms | Warm: 28ms", 9.2, 2.25, 2.1, 1.3)
+        ("Function URL", "AuthType: NONE\nCORS / HTTPS direct", 4.7, 4.65, 2.0, 1.15),
+        ("S3 Deployment Zip", "67MB runtime bundle\n/var/task cold load", 7.1, 4.65, 2.2, 1.15),
+        ("Patched Engine", "ONNX IR v9 session\nCold: 413ms | Warm: 29ms", 9.6, 4.65, 2.1, 1.15)
     ]
     for b_title, b_sub, bx, by, bw, bh in lambda_boxes:
         box = FancyBboxPatch((bx, by), bw, bh, boxstyle="round,pad=0.04,rounding_size=0.1",
-                             edgecolor="#FDE68A", facecolor="#FEFCE8", linewidth=1.2, zorder=3)
+                             edgecolor="#FDBA74", facecolor="#FFF7ED", linewidth=1.2, zorder=3)
         ax.add_patch(box)
-        ax.text(bx + 0.15, by + bh - 0.35, b_title, fontsize=9.5, fontweight="bold", color="#92400E", zorder=4)
-        ax.text(bx + 0.15, by + bh - 0.85, b_sub, fontsize=8, color="#D97706", zorder=4)
+        ax.text(bx + 0.12, by + bh - 0.32, b_title, fontsize=9, fontweight="bold", color="#9A3412", zorder=4)
+        ax.text(bx + 0.12, by + bh - 0.75, b_sub, fontsize=7.5, color="#EA580C", zorder=4)
+
+    # ── BRANCH C: SAGEMAKER SERVERLESS (Bottom Center) ──
+    draw_card(4.5, 1.75, 7.4, 2.2, "Option C: SageMaker Serverless (PaaS Managed)", 
+              "PyTorch DLC + ONNX Runtime (2048 MB RAM) · Pay-per-use ($0 Idle)", 
+              border_color=c_sm, title_color="#115E59")
+    
+    sm_boxes = [
+        ("Serverless Endpoint", "Auto-scale (0 to 10 conc)\nBoto3 InvokeEndpoint", 4.7, 1.95, 2.0, 1.15),
+        ("S3 model.tar.gz", "12.35 MB Gzip pkg\nPyTorch 2.0 CPU DLC", 7.1, 1.95, 2.2, 1.15),
+        ("Managed ONNX", "Custom inference handler\nCold: 155ms | Warm: 21ms", 9.6, 1.95, 2.1, 1.15)
+    ]
+    for b_title, b_sub, bx, by, bw, bh in sm_boxes:
+        box = FancyBboxPatch((bx, by), bw, bh, boxstyle="round,pad=0.04,rounding_size=0.1",
+                             edgecolor="#99F6E4", facecolor="#F0FDFA", linewidth=1.2, zorder=3)
+        ax.add_patch(box)
+        ax.text(bx + 0.12, by + bh - 0.32, b_title, fontsize=9, fontweight="bold", color="#0F766E", zorder=4)
+        ax.text(bx + 0.12, by + bh - 0.75, b_sub, fontsize=7.5, color="#0D9488", zorder=4)
 
     # ─────────────────────────────────────────────────────────────
     # SECTION 3: ANALYSIS & CROSSOVER ENGINE (Right)
     # ─────────────────────────────────────────────────────────────
-    draw_card(12.2, 1.8, 3.2, 6.4, "Analysis & Crossover", "Evaluation Pipeline", border_color=c_eval)
+    draw_card(12.6, 1.4, 3.6, 8.5, "Analysis & Crossover Engine", "Evaluation Pipeline", border_color=c_eval)
 
     sub_items_eval = [
-        ("Empirical Log", "live_benchmark.csv\n80 EC2 & 71 Lambda runs", "#ECFDF5", c_eval),
-        ("Crossover Solver", "λ* = 3.190 req/s\nBelow: Lambda wins\nAbove: EC2 wins", "#F0FDF4", "#065F46"),
-        ("Sensitivity Sweeps", "Duration (10-200ms)\nMemory (128-3008MB)\nVM pricing curves", "#F8FAFC", c_text_dark),
-        ("Visual Artifacts", "6 Publication figures\nCost & Latency curves", "#F8FAFC", c_text_dark)
+        ("3-Way Empirical Log", "live_benchmark_3way.csv\nEC2, Lambda & SageMaker", "#ECFDF5", c_eval),
+        ("Decision Boundary λ1*", "λ1* = 3.190 req/s\nBelow: Lambda wins\nAbove: EC2 wins", "#F0FDF4", "#065F46"),
+        ("Decision Boundary λ2*", "λ2* = 5.185 req/s\nBelow: SageMaker Serverless\nAbove: EC2 Container", "#F0FDF4", "#0F766E"),
+        ("Decision Boundary λ3*", "λ3* = 16.603 req/s\nBelow: SM Serverless\nAbove: SM Real-Time", "#F0FDF4", "#7C3AED"),
+        ("6 Publication Figures", "fig1_cost_crossover.png\nlive_comparison.png, figs 2-5", "#F8FAFC", c_text_dark)
     ]
-    cur_y = 6.4
+    cur_y = 8.35
     for title, desc, bg, tc in sub_items_eval:
-        box = FancyBboxPatch((12.45, cur_y), 2.7, 1.05, boxstyle="round,pad=0.04,rounding_size=0.1",
+        box = FancyBboxPatch((12.85, cur_y), 3.1, 1.05, boxstyle="round,pad=0.04,rounding_size=0.1",
                              edgecolor="#A7F3D0", facecolor=bg, linewidth=1, zorder=3)
         ax.add_patch(box)
-        ax.text(12.6, cur_y + 0.75, title, fontsize=9.5, fontweight="bold", color=tc, zorder=4)
-        ax.text(12.6, cur_y + 0.35, desc, fontsize=7.5, color=c_text_muted, zorder=4)
-        cur_y -= 1.3
+        ax.text(13.0, cur_y + 0.72, title, fontsize=9.5, fontweight="bold", color=tc, zorder=4)
+        ax.text(13.0, cur_y + 0.32, desc, fontsize=7.5, color=c_text_muted, zorder=4)
+        cur_y -= 1.35
 
     # ─────────────────────────────────────────────────────────────
     # CONNECTING ARROWS & TRAFFIC FLOW
     # ─────────────────────────────────────────────────────────────
-    arrow_props_ec2 = dict(arrowstyle="-|>", color=c_ec2, lw=2.2, mutation_scale=16)
-    arrow_props_lam = dict(arrowstyle="-|>", color=c_lambda, lw=2.2, mutation_scale=16)
-    arrow_props_eval = dict(arrowstyle="-|>", color=c_eval, lw=2.2, mutation_scale=16)
+    arrow_props_ec2 = dict(arrowstyle="-|>", color=c_ec2, lw=2.2, mutation_scale=15)
+    arrow_props_lam = dict(arrowstyle="-|>", color=c_lambda, lw=2.2, mutation_scale=15)
+    arrow_props_sm = dict(arrowstyle="-|>", color=c_sm, lw=2.2, mutation_scale=15)
+    arrow_props_eval = dict(arrowstyle="-|>", color=c_eval, lw=2.2, mutation_scale=15)
 
     # Client to EC2
-    ax.annotate("", xy=(4.5, 6.2), xytext=(3.8, 6.2), arrowprops=arrow_props_ec2, zorder=5)
-    ax.text(4.15, 6.45, "HTTP POST\n:8080/predict", ha="center", fontsize=7.5, fontweight="bold", color=c_ec2)
+    ax.annotate("", xy=(4.5, 8.25), xytext=(3.8, 8.25), arrowprops=arrow_props_ec2, zorder=5)
+    ax.text(4.15, 8.45, "HTTP", ha="center", fontsize=7.5, fontweight="bold", color=c_ec2)
 
     # Client to Lambda
-    ax.annotate("", xy=(4.5, 3.4), xytext=(3.8, 3.4), arrowprops=arrow_props_lam, zorder=5)
-    ax.text(4.15, 3.65, "HTTPS POST\nFunction URL", ha="center", fontsize=7.5, fontweight="bold", color=c_lambda)
+    ax.annotate("", xy=(4.5, 5.55), xytext=(3.8, 5.55), arrowprops=arrow_props_lam, zorder=5)
+    ax.text(4.15, 5.75, "HTTPS", ha="center", fontsize=7.5, fontweight="bold", color=c_lambda)
 
-    # EC2 inner flow
-    ax.annotate("", xy=(6.8, 5.8), xytext=(6.5, 5.8), arrowprops=dict(arrowstyle="->", color=c_ec2, lw=1.5), zorder=5)
-    ax.annotate("", xy=(9.2, 5.8), xytext=(8.9, 5.8), arrowprops=dict(arrowstyle="->", color=c_ec2, lw=1.5), zorder=5)
-
-    # Lambda inner flow
-    ax.annotate("", xy=(6.8, 2.9), xytext=(6.5, 2.9), arrowprops=dict(arrowstyle="->", color=c_lambda, lw=1.5), zorder=5)
-    ax.annotate("", xy=(9.2, 2.9), xytext=(8.9, 2.9), arrowprops=dict(arrowstyle="->", color=c_lambda, lw=1.5), zorder=5)
+    # Client to SageMaker
+    ax.annotate("", xy=(4.5, 2.85), xytext=(3.8, 2.85), arrowprops=arrow_props_sm, zorder=5)
+    ax.text(4.15, 3.05, "Boto3", ha="center", fontsize=7.5, fontweight="bold", color=c_sm)
 
     # EC2 to Evaluation
-    ax.annotate("", xy=(12.2, 5.8), xytext=(11.5, 5.8), arrowprops=arrow_props_eval, zorder=5)
+    ax.annotate("", xy=(12.6, 8.25), xytext=(11.9, 8.25), arrowprops=arrow_props_eval, zorder=5)
     # Lambda to Evaluation
-    ax.annotate("", xy=(12.2, 3.2), xytext=(11.5, 3.2), arrowprops=arrow_props_eval, zorder=5)
-    ax.text(11.85, 4.5, "Performance\n& Cost Telemetry", ha="center", fontsize=7.5, fontweight="bold", color=c_eval)
+    ax.annotate("", xy=(12.6, 5.55), xytext=(11.9, 5.55), arrowprops=arrow_props_eval, zorder=5)
+    # SageMaker to Evaluation
+    ax.annotate("", xy=(12.6, 2.85), xytext=(11.9, 2.85), arrowprops=arrow_props_eval, zorder=5)
+
+    ax.text(12.25, 5.65, "Telemetry\nLogs", ha="center", fontsize=7.5, fontweight="bold", color=c_eval)
 
     # Bottom Footer Summary Ribbon
-    footer = FancyBboxPatch((0.6, 0.4), 14.8, 0.9, boxstyle="round,pad=0.04,rounding_size=0.12",
+    footer = FancyBboxPatch((0.6, 0.3), 15.6, 0.85, boxstyle="round,pad=0.04,rounding_size=0.12",
                             edgecolor="#CBD5E1", facecolor="#FFFFFF", linewidth=1.2, zorder=2)
     ax.add_patch(footer)
-    ax.text(1.0, 0.85, "Key Takeaway:", fontsize=9.5, fontweight="bold", color=c_text_dark, zorder=3)
-    ax.text(2.35, 0.85, "Below λ* = 3.190 req/s, AWS Lambda avoids fixed VM idle costs ($15.18/mo) with up to 98% savings.", 
-            fontsize=9, color=c_text_muted, zorder=3)
-    ax.text(2.35, 0.55, "Above λ* = 3.190 req/s, EC2 Docker container provides 3x lower per-request cost and zero cold-start variance (10.2 ms vs 394 ms).", 
-            fontsize=9, color=c_text_muted, zorder=3)
+    ax.text(0.9, 0.72, "Key Architectural Finding:", fontsize=9.5, fontweight="bold", color=c_text_dark, zorder=3)
+    ax.text(3.1, 0.72, "Sparse Traffic (λ < 3.19 req/s): AWS Lambda provides up to 98% savings by eliminating VM idle costs ($15.18/mo).", 
+            fontsize=8.5, color=c_text_muted, zorder=3)
+    ax.text(3.1, 0.45, "Moderate Bursts (3.19 ≤ λ < 5.19 req/s): SageMaker Serverless balances zero idle cost with isolated PaaS burst capacity (20.8ms vs 29.2ms).", 
+            fontsize=8.5, color=c_text_muted, zorder=3)
+    ax.text(3.1, 0.18, "Sustained Traffic (λ ≥ 5.19 req/s): EC2 Docker Container amortizes fixed costs, providing 2.4x faster latency (10.3ms) and zero cold-start delay.", 
+            fontsize=8.5, color=c_text_muted, zorder=3)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, facecolor=fig.get_facecolor(), edgecolor="none")
     plt.close()
-    print(f"Architecture diagram successfully saved to {output_path}")
+    print(f"Publication architecture diagram successfully saved to {output_path}")
 
 if __name__ == "__main__":
     create_diagram()
