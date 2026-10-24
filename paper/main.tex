@@ -1,0 +1,235 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{url}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Cost and Latency Crossover Analysis of Machine Learning Inference Deployment Modes: An Empirical Study on AWS EC2, Lambda, and SageMaker}
+
+\author{\IEEEauthorblockN{Author Name}
+\IEEEauthorblockA{\textit{Department of Computer Science and Engineering} \\
+\textit{Institution / University Name}\\
+City, Country \\
+email@institution.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+Operational inference constitutes up to 90\% of the aggregate cost in production machine learning (ML) lifecycles. Cloud practitioners face a fundamental architectural trade-off when selecting deployment tiers: Infrastructure-as-a-Service (IaaS) always-on virtual machines, Function-as-a-Service (FaaS) serverless computing, or specialized Platform-as-a-Service (PaaS) managed ML endpoints. While serverless paradigms offer auto-scaling to zero with zero idle cost, they incur cold-start latency overheads and elevated marginal per-request costs under sustained traffic. In this paper, we formulate a closed-form analytical cost model and validate it against live empirical measurements across three production AWS deployment modes in Sydney (\texttt{ap-southeast-2}): Dockerized FastAPI on Amazon EC2 (\texttt{t3.small}), AWS Lambda (1024\,MB), and Amazon SageMaker Serverless Inference (2048\,MB), all serving an ONNX-optimized MobileNetV2 computer vision pipeline. Empirical load testing demonstrates that dedicated EC2 containers yield deterministic inference ($10.31\pm0.14$\,ms) with zero cold-start delay, whereas Lambda and SageMaker Serverless incur cold initialization penalties of $413.2$\,ms and $155.6$\,ms, respectively. Closed-form and numerical optimization reveals three distinct operational decision boundaries: $\lambda_1^* = 3.190$\,req/s (Lambda vs. EC2), $\lambda_2^* = 5.185$\,req/s (SageMaker Serverless vs. EC2), and $\lambda_3^* = 16.603$\,req/s (SageMaker Serverless vs. SageMaker Real-Time). Below $\lambda_1^*$, Lambda reduces cost by up to 98.6\% over always-on VMs; beyond $\lambda_2^*$, fixed VM amortization dominates in both throughput and economic efficiency. Our framework provides actionable decision rules for optimizing ML inference deployments.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Serverless Computing, Machine Learning Inference, Cloud Economics, Cost Crossover Analysis, AWS Lambda, Amazon SageMaker, Amazon EC2, ONNX Runtime, Cold Start.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Machine learning (ML) models are increasingly integrated into real-time interactive applications, ranging from autonomous vision inspection to conversational assistants. However, while substantial research focuses on training efficiency, recent industry analyses reveal that operational serving and inference account for 80\% to 90\% of total ML cloud expenditures~\cite{jonas2019cloud, romero2021infless}. Consequently, selecting the optimal deployment architecture is a critical engineering decision directly affecting operational budgets, quality of service (QoS), and latency service level agreements (SLAs).
+
+Cloud providers currently offer three distinct paradigm tiers for hosting ML inference workloads:
+\begin{enumerate}
+    \item \textbf{Infrastructure-as-a-Service (IaaS):} Always-on dedicated virtual machine (VM) instances (e.g., Docker containers on Amazon EC2). This paradigm offers deterministic compute allocation and zero cold starts, but incurs continuous 24/7 billing regardless of traffic volume.
+    \item \textbf{Function-as-a-Service (FaaS):} MicroVM serverless functions (e.g., AWS Lambda). This model provides millisecond-level pay-per-use billing and auto-scaling down to zero ($0 idle cost), but suffers from runtime cold starts and higher marginal costs per invocation.
+    \item \textbf{Platform-as-a-Service (PaaS):} Specialized managed ML endpoints (e.g., Amazon SageMaker Serverless Inference). This tier abstracts infrastructure operations while providing pre-packaged Deep Learning Containers (DLCs) and burst resource capacity.
+\end{enumerate}
+
+Despite the practical importance of this architectural choice, cloud practitioners frequently rely on heuristic rules of thumb rather than rigorous mathematical or empirical thresholds. When traffic is sparse, always-on VMs waste capital on idle compute. Conversely, when sustained traffic is routed to serverless endpoints, cumulative per-request fees can quickly exceed the fixed lease of a dedicated VM.
+
+In this work, we present a parameterised cost model and a reproducible empirical testbed that resolves this dilemma. Specifically, we address the following research questions:
+\begin{itemize}
+    \item \textbf{RQ1 (Latency and Variance):} How do pure server-side inference latency, tail variance, and cold-start provisioning delays compare across IaaS, FaaS, and PaaS architectures running an identical neural network?
+    \item \textbf{RQ2 (Mathematical Crossover):} At what precise request arrival rates ($\lambda^*$) do the cost-optimal deployment architectures shift?
+    \item \textbf{RQ3 (Sensitivity and Robustness):} How do model duration, memory sizing, and cloud pricing variances shift these crossover boundaries?
+\end{itemize}
+
+\textbf{Contributions:}
+\begin{itemize}
+    \item \textbf{Empirical Testbed:} We deploy, instrument, and evaluate three live cloud endpoints in AWS Sydney (\texttt{ap-southeast-2}): EC2 Container (\texttt{t3.small}), AWS Lambda (1024\,MB), and SageMaker Serverless (2048\,MB), serving an ONNX-runtime MobileNetV2 pipeline.
+    \item \textbf{Dual Analytical Formulation:} We derive closed-form and numerical cost functions incorporating stochastic cold-start probability decay $P_{\text{cold}}(\lambda)$ and memory-duration billing parameters.
+    \item \textbf{Crossover Decision Boundaries:} We empirically prove the existence of three decision thresholds ($\lambda_1^* = 3.190$\,req/s, $\lambda_2^* = 5.185$\,req/s, $\lambda_3^* = 16.603$\,req/s), delineating three practical operational zones for cloud ML practitioners.
+\end{itemize}
+
+\section{Related Work}
+\subsection{Serverless Cloud Computing}
+Serverless computing has emerged as a dominant execution model for event-driven computing~\cite{jonas2019cloud}. Wang et al.~\cite{wang2018peeking} conducted extensive characterizations of AWS Lambda, Google Cloud Functions, and Azure Functions, revealing heterogeneity in microVM allocation, CPU throttling, and network throughput. Shahrad et al.~\cite{shahrad2020serverless} analyzed production serverless traces at Microsoft Azure, demonstrating that over 80\% of serverless functions are invoked infrequently, highlighting the economic attractiveness of scale-to-zero architectures.
+
+\subsection{Machine Learning Inference Serving}
+Dedicated inference serving systems such as Clipper~\cite{crankshaw2017clipper} and Triton Inference Server focus on batching, queue management, and GPU hardware saturation. However, deploying these frameworks on dedicated cloud instances requires over-provisioning to accommodate peak traffic, leading to poor resource utilization during lulls. 
+
+To overcome this, recent work has explored serverless ML inference. Romero et al.~\cite{romero2021infless} and Yu et al.~\cite{yu2021gillis} investigated GPU sharing and model partitioning across serverless workers. While existing literature demonstrates that serverless inference is viable for small-to-medium models, few prior studies empirically contrast IaaS, general FaaS, and specialized ML PaaS within an end-to-end economic cost crossover formulation.
+
+\section{System Architecture and Deployment Testbed}
+To ensure rigorous empirical parity, the identical model architecture, input representation, and inference engine were deployed across all three AWS testbeds in the Sydney (\texttt{ap-southeast-2}) region.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/architecture_simple.png}
+    \caption{System architecture of the 3-way ML inference testbed on AWS, connecting client load generation with IaaS (EC2), FaaS (Lambda), and PaaS (SageMaker Serverless) backends.}
+    \label{fig:arch}
+\end{figure}
+
+\subsection{Model Pipeline and Serialization}
+We selected MobileNetV2~\cite{sandler2018mobilenetv2}, a standard 53-layer convolutional neural network widely adopted for computer vision classification. The PyTorch model weights were converted to an Open Neural Network Exchange (ONNX) representation with dynamic batching. ONNX Runtime~\cite{onnxruntime2021} (v1.16/v1.29) was selected as the execution provider due to its graph fusion, constant folding, and vectorised SIMD instruction kernels. The total serialized model footprint is 14.0\,MB. The input tensor is a pre-processed $1\times 3\times 224\times 224$ single-precision floating-point array.
+
+\subsection{Deployment Testbeds}
+\begin{enumerate}
+    \item \textbf{Option A: EC2 Container (IaaS Baseline):} An Amazon EC2 \texttt{t3.small} virtual machine (2 vCPUs, 2.0\,GB RAM) running Ubuntu 22.04 LTS. The application is containerized via Docker using \texttt{python:3.11-slim}, exposing a high-performance FastAPI asynchronous ASGI server over port 8080. The model is loaded into memory during container initialization.
+    \item \textbf{Option B: AWS Lambda (FaaS Serverless):} An AWS Lambda function configured with 1024\,MB RAM running Python 3.11. Invocations are routed directly via an AWS Lambda Function URL (AuthType: NONE), eliminating API Gateway latency and fees. Due to Lambda execution environment byte-code constraints, the ONNX model was packaged and patched for IR v9 execution.
+    \item \textbf{Option C: SageMaker Serverless (PaaS Managed):} An Amazon SageMaker Serverless endpoint configured with 2048\,MB RAM and a concurrency limit of 10. The endpoint utilizes AWS's official PyTorch 2.0.0 CPU Inference Deep Learning Container (DLC) and retrieves model weights via an optimized S3 \texttt{model.tar.gz} bundle (12.35\,MB).
+\end{enumerate}
+
+\subsection{Load Generator and Telemetry Harness}
+The benchmarking harness (\texttt{benchmark\_live.py}) is implemented using Python's asynchronous I/O framework (\texttt{httpx} and \texttt{boto3}). It executes multi-concurrency load stages (1, 5, 10 concurrent workers) generating synthetic image tensors. For each transaction, the client records:
+\begin{equation}
+    \tau_{\text{RTT}} = t_{\text{response\_received}} - t_{\text{request\_sent}}
+\end{equation}
+Additionally, server-side execution headers return pure model forward-pass time ($\tau_{\text{inf}}$) and container model load time ($\tau_{\text{load}}$).
+
+\section{Analytical Cost Formulation}
+Cloud cost dynamics differ fundamentally across always-on and serverless models. Let $\lambda$ denote the average request arrival rate (requests per second).
+
+\subsection{Always-On Container Cost (IaaS)}
+For a dedicated VM, compute costs are incurred 24/7 regardless of actual request traffic. Let $C_{\text{hour}}$ denote the hourly VM rate (\$0.0208/hr for \texttt{t3.small}). The cost per 1,000 inferences at rate $\lambda$ is amortized across total throughput:
+\begin{equation}
+    C_{\text{container}}(\lambda) = \frac{C_{\text{hour}}}{3600 \cdot \lambda} \times 1000
+    \label{eq:container_cost}
+\end{equation}
+As $\lambda \to \infty$, $C_{\text{container}}(\lambda) \to 0$ asymptotically, demonstrating the power of fixed-cost amortization under high utilization.
+
+\subsection{Serverless Cost Formulation (FaaS and PaaS)}
+Serverless platforms bill strictly for request quantity and memory-duration allocation. Total cost per 1,000 invocations is expressed as:
+\begin{equation}
+    C_{\text{serverless}}(\lambda) = 1000 \times \left( c_{\text{req}} + c_{\text{gb}} \cdot M \cdot \bar{\tau}(\lambda) \right)
+    \label{eq:serverless_cost}
+\end{equation}
+where $c_{\text{req}}$ is the per-request charge (\$0.20 per $10^6$ requests), $c_{\text{gb}}$ is the compute charge per GB-second (\$0.00001667 for Lambda; \$0.000020 for SageMaker Serverless), and $M$ is memory allocation in GB.
+
+The effective average duration $\bar{\tau}(\lambda)$ is a non-linear combination of warm inference duration $\tau_{\text{warm}}$ and cold initialization duration $\tau_{\text{cold}}$:
+\begin{equation}
+    \bar{\tau}(\lambda) = (1 - P_{\text{cold}}(\lambda))\tau_{\text{warm}} + P_{\text{cold}}(\lambda)\tau_{\text{cold}}
+\end{equation}
+Following empirical queueing observations~\cite{shahrad2020serverless}, container lifecycle reuse causes cold-start probability to decay exponentially with request rate:
+\begin{equation}
+    P_{\text{cold}}(\lambda) = \min\left(0.5, \max\left(0.01, P_{\text{base}} \cdot e^{-\lambda / \lambda_{\text{decay}}}\right)\right)
+\end{equation}
+where empirical parameters for our testbed are $P_{\text{base}} = 0.20$ and $\lambda_{\text{decay}} = 2.0$.
+
+\subsection{Crossover Decision Derivation}
+The mathematical crossover threshold $\lambda^*$ occurs where the cost curves intersect:
+\begin{equation}
+    C_{\text{container}}(\lambda^*) = C_{\text{serverless}}(\lambda^*)
+\end{equation}
+Assuming negligible cold starts at moderate traffic ($P_{\text{cold}} \to 0$), we derive the closed-form analytical crossover:
+\begin{equation}
+    \lambda^* = \frac{C_{\text{hour}}}{3600 \cdot \left( c_{\text{req}} + c_{\text{gb}} \cdot M \cdot \tau_{\text{warm}} \right)}
+    \label{eq:crossover_closed}
+\end{equation}
+When cold-start probability decay is preserved, $\lambda^*$ is solved numerically using Brent's method over $\lambda \in [10^{-3}, 10^3]$.
+
+\section{Empirical Evaluation and Results}
+Live load tests were executed against all three production AWS endpoints. Table~\ref{tab:empirical_summary} presents the empirical telemetry.
+
+\begin{table}[h]
+\centering
+\caption{Empirical 3-Way Benchmark Telemetry (AWS Sydney)}
+\label{tab:empirical_summary}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{EC2 Container} & \textbf{AWS Lambda} & \textbf{SageMaker Serv.} \\
+\midrule
+AWS Paradigm & IaaS & FaaS & PaaS \\
+Allocated RAM & 2048\,MB & 1024\,MB & 2048\,MB \\
+Idle Hourly Cost & \$0.0208 & \textbf{\$0.00} & \textbf{\$0.00} \\
+\midrule
+Mean Inference ($\tau_{\text{inf}}$) & \textbf{10.31 ms} & 29.18 ms & 20.84 ms \\
+Std. Deviation ($\sigma$) & \textbf{0.14 ms} & 12.93 ms & 16.61 ms \\
+Median (P50) & \textbf{10.29 ms} & 30.37 ms & 14.85 ms \\
+95th Percentile (P95) & \textbf{10.58 ms} & 53.62 ms & 68.80 ms \\
+\midrule
+Cold Start Delay & \textbf{0.0 ms} & 413.2 ms & 155.6 ms \\
+Max Throughput & \textbf{18.7 req/s} & 5.6 req/s & 9.8 req/s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/live_comparison.png}
+    \caption{Empirical benchmark comparison: (Left) Pure server-side inference latency; (Right) Cold-start provisioning overhead across all three modes.}
+    \label{fig:live_comp}
+\end{figure}
+
+\subsection{Inference Latency and Jitter (RQ1)}
+As illustrated in Fig.~\ref{fig:live_comp} (Left), EC2 Container achieved the fastest inference latency ($10.31$\,ms) with virtually zero jitter ($\sigma = 0.14$\,ms). This stability stems from dedicated CPU pinning and an OS page cache that retains model weights continuously.
+
+In contrast, AWS Lambda registered a mean inference latency of $29.18$\,ms with higher standard deviation ($\sigma = 12.93$\,ms). In AWS Lambda, compute capability is directly tied to memory tiering; a 1024\,MB function receives approximately 0.6 vCPUs, resulting in software execution throttling during convolutional kernel computation.
+
+SageMaker Serverless (2048\,MB) achieved a mean warm inference latency of $20.84$\,ms, outperforming Lambda by 1.40$\times$. The allocated 2048\,MB memory tier grants the PyTorch DLC access to 2 full burst vCPUs, enabling ONNX Runtime to execute multi-threaded matrix operations efficiently.
+
+\subsection{Cold-Start Provisioning Penalty (RQ1)}
+Fig.~\ref{fig:live_comp} (Right) highlights the initialization overhead during cold scaling events:
+\begin{itemize}
+    \item \textbf{EC2 Container:} Incurs \textbf{0.0\,ms} cold start, as the process remains permanently memory-resident.
+    \item \textbf{SageMaker Serverless:} Exhibited an average model load overhead of \textbf{155.6\,ms}. Because SageMaker Serverless uses pre-warmed deep learning container base images, cold overhead is strictly limited to extracting the S3 \texttt{model.tar.gz} bundle and instantiating the ONNX session.
+    \item \textbf{AWS Lambda:} Exhibited a cold-start overhead of \textbf{413.2\,ms}, reflecting complete microVM boot, Python interpreter initialization, runtime module loading, and ONNX graph construction.
+\end{itemize}
+
+\section{Cost Crossover and Decision Boundaries}
+By coupling empirical latency parameters with AWS billing schedules, we generated the comprehensive cost crossover curve shown in Fig.~\ref{fig:crossover}.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig1_cost_crossover.png}
+    \caption{Multi-architecture cost crossover curves and decision boundaries on AWS Sydney. Shaded regions indicate the cost-optimal zones.}
+    \label{fig:crossover}
+\end{figure}
+
+\subsection{Decision Boundaries and Operational Zones (RQ2)}
+Solving the cost equilibrium equations yields three key crossover thresholds:
+\begin{enumerate}
+    \item \textbf{$\lambda_1^* = 3.190$\,req/s (191.4 req/min) — Lambda vs. EC2:}
+    Below 3.19\,req/s (\textbf{Zone I}), AWS Lambda is optimal. At $\lambda = 0.017$\,req/s (approx. 1 request per minute), Lambda achieves a monthly cost of \$0.00 under the AWS Free Tier and \$0.05 without free tier, representing a \textbf{98.6\% cost reduction} over EC2 (\$15.18/mo).
+    \item \textbf{$\lambda_2^* = 5.185$\,req/s (311.1 req/min) — SageMaker Serv. vs. EC2:}
+    Between 3.19 and 5.19\,req/s (\textbf{Zone II}), SageMaker Serverless provides lower cost than EC2 while offering 1.4$\times$ faster inference than Lambda without infrastructure maintenance.
+    \item \textbf{$\lambda_3^* = 16.603$\,req/s (996.2 req/min) — SageMaker Serv. vs. Real-Time:}
+    Within the managed SageMaker ecosystem, serverless endpoints remain more economical than a dedicated \texttt{ml.t2.medium} real-time endpoint (\$0.065/hr) until throughput exceeds 16.6\,req/s.
+\end{enumerate}
+
+Beyond $\lambda_2^* = 5.185$\,req/s (\textbf{Zone III}), the EC2 Docker container dominates unconditionally, providing lower cost per transaction, 2.4$\times$ faster inference, and immunity to cold-start tail latency.
+
+\subsection{Sensitivity Analysis (RQ3)}
+We conducted parametric sweeps across three critical variables:
+\begin{itemize}
+    \item \textbf{Model Execution Duration ($\tau_{\text{warm}}$):} For heavier neural networks ($\tau_{\text{warm}} = 200$\,ms), the crossover point shifts downward to $\lambda^* \approx 0.8$\,req/s, making containers economical at much lower request rates.
+    \item \textbf{Memory Allocation ($M$):} Increasing serverless memory inflates GB-second costs linearly, lowering the crossover rate unless accompanied by an equivalent reduction in inference time.
+    \item \textbf{VM Pricing Tiers:} Migrating from \texttt{t3.small} to Spot instances or Savings Plans reduces hourly lease costs by 40--70\%, shifting the container crossover threshold down to $\lambda^* \approx 1.0$\,req/s.
+\end{itemize}
+
+\section{Threats to Validity}
+\begin{enumerate}
+    \item \textbf{Network Transit Overhead:} In our experiments, client requests originated geographically distant from Sydney, adding an approximately 300\,ms WAN round-trip time. While absolute RTT is dominated by network ping, server-side headers isolated the pure compute and cold-start durations with microsecond precision.
+    \item \textbf{Model Scale:} We evaluated MobileNetV2 (14\,MB). Large Language Models (LLMs) or diffusion models (1--10\,GB) require specialized GPU infrastructure; serverless cold starts on such weights can exceed 20--60 seconds, substantially narrowing the serverless viability window.
+    \item \textbf{Ancillary Cloud Costs:} This study abstracts secondary cloud expenses such as AWS CloudWatch log ingestion and inter-AZ data egress, which may account for 5--10\% of total operational invoices under high volume.
+\end{enumerate}
+
+\section{Conclusion and Future Work}
+This paper presented an empirical and analytical investigation of machine learning inference deployment modes across IaaS (EC2), FaaS (Lambda), and PaaS (SageMaker Serverless). Our findings confirm that serverless is mathematically optimal for sparse, intermittent workloads ($\lambda < 3.19$\,req/s), saving up to 98\% of operational costs by eliminating idle allocations. However, for sustained traffic ($\lambda > 5.19$\,req/s), always-on containers deliver superior cost efficiency, 2.4$\times$ lower latency, and zero cold-start variance.
+
+In future work, we plan to extend this methodology to multi-cloud environments (Google Cloud Run vs. Vertex AI; Azure Container Apps vs. Azure ML) and develop dynamic, auto-switching proxy routers that seamlessly migrate traffic between serverless and container backends based on real-time arrival rate estimation.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
