@@ -16,3 +16,6 @@ venv/
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Research Paper (keep private)
+paper/
